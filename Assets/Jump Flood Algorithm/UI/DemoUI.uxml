@@ -1,0 +1,16 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/Jump%20Flood%20Algorithm/UI/DemoUIStyle.uss?fileID=7433441132597879392&amp;guid=88bf61ba4dc181f4e99dbb0f74dc235c&amp;type=3#DemoUIStyle" />
+    <engine:VisualElement name="Root" class="Root">
+        <engine:Label text="Jump Flood Algorithm" name="Title" class="Title" />
+        <engine:VisualElement name="Container" class="Container">
+            <engine:VisualElement name="Source" class="ContainerView" />
+            <engine:VisualElement name="Result" class="Result ContainerView">
+                <engine:VisualElement name="ResultTweakMenu" style="flex-grow: 1;">
+                    <engine:Slider label="Width" value="0.5" high-value="1" fill="true" show-input-field="false" class="TweakLabel" />
+                    <engine:Toggle label="Display DF" class="TweakLabel" />
+                </engine:VisualElement>
+                <engine:ToggleButtonGroup name="ResultMenu" />
+            </engine:VisualElement>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

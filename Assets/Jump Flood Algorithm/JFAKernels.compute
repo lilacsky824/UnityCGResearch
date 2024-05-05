@@ -1,0 +1,84 @@
+#pragma kernel UVBufferFill
+#pragma kernel JFAKernel
+#pragma kernel DFKernel
+#pragma kernel ResultKernel
+
+Texture2D<float4> Source;
+RWTexture2D<float4> UV;
+RWTexture2D<float4> JFA;
+RWTexture2D<float1> DF;
+RWTexture2D<float4> Result;
+float4 TexelSize;
+int JumpSize;
+float ShapeWidth;
+bool ShowDF;
+
+#define INVALIDATEDISTANCE 1e16
+#define NULLPOS -1
+#define NULLPOSVECTOR2 float2(-1, -1)
+#define DF_FINESS 32
+#define WIDTH_MULTIPLIER 0.1
+#define SHAPELINE_WIDTH 0.02
+
+[numthreads(8, 8, 1)]
+void UVBufferFill(uint3 id : SV_DispatchThreadID) {
+    float alphaMask = Source[id.xy].a;
+
+    float2 uv = ((float2)id.xy + 0.5f) * TexelSize.zw;
+    float2 outerUV = alphaMask > 0.5f ? uv : NULLPOS;
+    //float2 innerUV = alphaMask > 0.5f ? NULLPOS : uv;
+
+    UV[id.xy] = float4(outerUV, 0, 1);
+    //UV[id.xy] = float4(outerUV, innerUV);
+}
+
+[numthreads(8, 8, 1)]
+void JFAKernel(uint3 id : SV_DispatchThreadID) {
+    int2 pos = id.xy;
+    float bestDis = INVALIDATEDISTANCE;
+    float2 bestUV = 0;
+    
+    for (int u = -1; u <= 1; u++) {
+        for (int v = -1; v <= 1; v++) {
+            int2 jumpUV = id.xy + int2(u, v) * JumpSize;
+            jumpUV = clamp(jumpUV, int2(0, 0), (int2)TexelSize.xy - 1);
+
+            float2 jumpUVResult = UV[jumpUV];
+            // Comapare with floating point precision will have artifact.
+            float2 uvDelta = pos - jumpUVResult * TexelSize.xy;
+
+            float stepDis = dot(uvDelta, uvDelta);
+            if (stepDis < bestDis && jumpUVResult.y != NULLPOS) {
+                bestDis = stepDis;
+                bestUV = jumpUVResult;
+            }
+        }
+    }
+
+    bestUV = bestDis == INVALIDATEDISTANCE ?  NULLPOSVECTOR2 : bestUV;
+    JFA[pos] = float4(bestUV, 0, 1);
+}
+
+[numthreads(8, 8, 1)]
+void DFKernel(uint3 id : SV_DispatchThreadID) {
+    float2 uv = (float2)id.xy * TexelSize.zw;
+    float2 uv2 = JFA[id.xy];
+
+    float dist = distance(uv2, uv);
+
+    DF[id.xy] = dist;
+}
+
+[numthreads(8, 8, 1)]
+void ResultKernel(uint3 id : SV_DispatchThreadID) {
+    float df = DF[id.xy];
+    float shape = step(df, ShapeWidth * WIDTH_MULTIPLIER);
+    float3 color = Source[JFA[id.xy] * TexelSize.xy];
+
+    float fracDF = frac(df * DF_FINESS);
+    float3 lineColor = float3(0.8f, 0, 0);
+    float2 dfLineOffset = float2(ShapeWidth + SHAPELINE_WIDTH, ShapeWidth - SHAPELINE_WIDTH) * WIDTH_MULTIPLIER;
+
+    float dfShapeLine = step(df, dfLineOffset.x) * step(dfLineOffset.y, df);
+    Result[id.xy] = ShowDF ? float4(lerp(color * fracDF, lineColor, dfShapeLine), 1) : float4((shape) * color, 1);
+}
