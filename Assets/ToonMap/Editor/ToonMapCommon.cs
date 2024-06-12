@@ -46,7 +46,7 @@ public static class ToonMapCommon
         if (importer != null)
         {
             importer.mipmapEnabled = false;
-            importer.wrapMode = TextureWrapMode.Repeat;
+            importer.wrapMode = TextureWrapMode.Clamp;
 
             // Save the changes to the asset
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
