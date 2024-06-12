@@ -1,0 +1,116 @@
+﻿#pragma kernel RampMapGenerator
+#pragma kernel GradientMapGenerator
+#pragma kernel GradientMapPreviewGenerator
+
+RWTexture2D<float4> _RampMap;
+float _RampMapResolution;
+
+int _GradientIndex;
+bool _ShowAlpha;
+int _RemapType;
+RWTexture2D<float4> _GradientMap;
+Texture2D _PreviewTexture;
+RWTexture2D<float4> _GradientMapPreview;
+float2 _GradientMapResolution;
+float2 _PreviewTextureResolution;
+
+RWStructuredBuffer<float4> _GradientColorKeys;
+float _GradientColorKeysAmount;
+float _GradientHardness;
+
+float4 Unity_SampleGradient_float(RWStructuredBuffer<float4> GradientColorKeys, float Time)
+{
+    float3 color = GradientColorKeys[0].rgb;
+    [unroll]
+    for (int i = 1; i < 8; i++)
+    {
+        uint id = i;
+        float colorPos = saturate((Time - GradientColorKeys[id - 1].w) / (GradientColorKeys[id].w - GradientColorKeys[id - 1].w)) * step(id, _GradientColorKeysAmount - 1);
+        color = lerp(color, GradientColorKeys[id].rgb, lerp(colorPos, step(0.01, colorPos), _GradientHardness));
+    }
+
+    float alpha = 1.0f;
+
+    return float4(color, alpha);
+}
+
+float3 Unity_ColorspaceConversion_RGB_HSV_float(float3 In)
+{
+    float4 K = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    float4 P = lerp(float4(In.bg, K.wz), float4(In.gb, K.xy), step(In.b, In.g));
+    float4 Q = lerp(float4(P.xyw, In.r), float4(In.r, P.yzx), step(P.x, In.r));
+    float D = Q.x - min(Q.w, Q.y);
+    float  E = 1e-10;
+    return float3(abs(Q.z + (Q.w - Q.y)/(6.0 * D + E)), D / (Q.x + E), Q.x);;
+}
+
+[numthreads(8,8,1)]
+void RampMapGenerator (uint3 id : SV_DispatchThreadID)
+{
+    _RampMap.GetDimensions(_RampMapResolution, _RampMapResolution);
+    
+    float gradientSpreadness = 1.0f - (_RampMapResolution - (float)id.y) / (_RampMapResolution * 2.0f);
+    float time = id.x / _RampMapResolution;
+    float timeOfColor = smoothstep(1.0f - gradientSpreadness, gradientSpreadness, time);
+    _RampMap[id.xy] = Unity_SampleGradient_float(_GradientColorKeys, timeOfColor);
+}
+
+[numthreads(8,1,1)]
+void GradientMapGenerator (uint3 id : SV_DispatchThreadID)
+{
+    _GradientMap.GetDimensions(_GradientMapResolution.x, _GradientMapResolution.y);
+    
+    float time = id.x / _GradientMapResolution;
+    int index = (_GradientMapResolution.y - 1) - _GradientIndex;
+    _GradientMap[float2(id.x, index)] = Unity_SampleGradient_float(_GradientColorKeys, time);
+}
+
+[numthreads(8,8,1)]
+void GradientMapPreviewGenerator (uint3 id : SV_DispatchThreadID)
+{
+    _GradientMap.GetDimensions(_GradientMapResolution.x, _GradientMapResolution.y);
+    _PreviewTexture.GetDimensions(_PreviewTextureResolution.x, _PreviewTextureResolution.y);
+    
+    float4 previewTextureColor = _PreviewTexture.Load(int3(id.xy, 0));
+
+    float greyscalePreviewTexture = 0;
+    //Apply Inverse Gamma 2.2
+    previewTextureColor = pow(previewTextureColor, 0.45f);
+
+    switch (_RemapType)
+    {
+        case 0 : 
+        greyscalePreviewTexture = dot(previewTextureColor, float3(0.3, 0.59, 0.11));
+        break;
+
+        case 1 : 
+        greyscalePreviewTexture = Unity_ColorspaceConversion_RGB_HSV_float(previewTextureColor).r;
+        break;
+
+        case 2 : 
+        greyscalePreviewTexture = Unity_ColorspaceConversion_RGB_HSV_float(previewTextureColor).g;
+        break;
+
+        case 3 : 
+        greyscalePreviewTexture = Unity_ColorspaceConversion_RGB_HSV_float(previewTextureColor).b;
+        break;
+
+        case 4 : 
+        float3 hsv = Unity_ColorspaceConversion_RGB_HSV_float(previewTextureColor);
+        greyscalePreviewTexture = hsv.g * hsv.b;
+        break;
+    }
+    
+
+    int2 samplePos = int2(round(greyscalePreviewTexture * _GradientMapResolution.x), _GradientMapResolution.y - (_GradientIndex + 1));
+    //Prevent samplePos over _GradientMapResolution.x which will be empty value(black).
+    samplePos.x = min(samplePos.x, _GradientMapResolution.x - 1);
+
+    _GradientMapPreview[id.xy] = _GradientMap.Load(samplePos);
+
+    if(_ShowAlpha)
+    {
+        _GradientMapPreview[id.xy] *= previewTextureColor.a;
+    }
+}
+

@@ -1,0 +1,28 @@
+:root {
+    flex-grow: 1;
+    flex-shrink: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#saveButton {
+    margin-bottom: 10px;
+}
+
+#previewButton {
+    margin-bottom: 10px;
+}
+
+.previewContainer {
+    margin-top: 10px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    -unity-background-scale-mode: scale-to-fit;
+    margin-bottom: 10px;
+}
+
+#unity-content-and-vertical-scroll-container > #unity-content-viewport > #unity-content-container {
+    height: 100%;
+    flex-grow: 1;
+    flex-shrink: 0;
+}

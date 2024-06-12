@@ -1,0 +1,13 @@
+fileFormatVersion: 2
+guid: e7b8722dfb37cbc4c908b54cc6e2ef3b
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - _rampMapComputeShader: {fileID: 7200000, guid: 8b87a4488dee2d54b80df98d711b0c0b,
+      type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

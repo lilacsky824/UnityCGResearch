@@ -1,0 +1,19 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <Style src="project://database/Assets/GradientMap/UI/RampMapGenerator.uss?fileID=7433441132597879392&amp;guid=6aa40e1677b0c7542b74eede3788ea7e&amp;type=3#RampMapGenerator" />
+    <ui:VisualElement style="height: 100%;">
+        <ui:Button name="saveButton" text="Save GradientMap" />
+        <ui:Button name="previewButton" text="Preview GradientMap" />
+        <ui:IntegerField name="resolutionField" label="GradientMap Resolution:" value="128" />
+        <ui:Slider name="hardnessSlider" label="Gradient Hardness" low-value="0" high-value="1" value="0.0" />
+        <ui:Label text="Gradients" />
+        <ui:IMGUIContainer name="gradientListContainer" />
+        <uie:ObjectField name="previewTextureField" label="Grayscale Texture For Preview" object-type="UnityEngine.Texture2D" allow-scene-objects="false" type="UnityEngine.Texture2D, UnityEngine.CoreModule" />
+        <ui:Toggle name="showAlphaToggle" label="Preview with Alpha" />
+        <ui:EnumField name="sourceTypeField" label="Greyscale From Source Image&apos;s" />
+        <ui:HelpBox name="errorBox" message-type="Error" text="GradientMap Generator ComputeShader Is Missing" />
+        <ui:ScrollView name="previewContainer" style="flex-grow: 1; flex-shrink: 1;">
+            <ui:VisualElement name="gradientPreview" />
+            <ui:VisualElement name="applyGradientPreview" class="previewContainer" />
+        </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>
