@@ -14,24 +14,32 @@ RWTexture2D<float4> _GradientMapPreview;
 float2 _GradientMapResolution;
 float2 _PreviewTextureResolution;
 
-RWStructuredBuffer<float4> _GradientColorKeys;
-float _GradientColorKeysAmount;
+struct GradientKeyData {
+    float4 color; // w is Time
+    float2 alpha; // w is Time
+};
+struct GradientParameterData {
+    uint colorLength;
+    uint alphaLength;
+    //uint mode;
+};
+const uint KeyCount = 8;
+StructuredBuffer<GradientKeyData> _GradientKeyData;
+StructuredBuffer<GradientParameterData> _GradientParameterData;
 float _GradientHardness;
 
-float4 Unity_SampleGradient_float(RWStructuredBuffer<float4> GradientColorKeys, float Time)
+float3 SRGBToLinear(float3 In)
 {
-    float3 color = GradientColorKeys[0].rgb;
-    [unroll]
-    for (int i = 1; i < 8; i++)
-    {
-        uint id = i;
-        float colorPos = saturate((Time - GradientColorKeys[id - 1].w) / (GradientColorKeys[id].w - GradientColorKeys[id - 1].w)) * step(id, _GradientColorKeysAmount - 1);
-        color = lerp(color, GradientColorKeys[id].rgb, lerp(colorPos, step(0.01, colorPos), _GradientHardness));
-    }
+    float3 linearRGBLo = In / 12.92;;
+    float3 linearRGBHi = pow(max(abs((In + 0.055) / 1.055), 1.192092896e-07), float3(2.4, 2.4, 2.4));
+    return float3(In <= 0.04045) ? linearRGBLo : linearRGBHi;
+}
 
-    float alpha = 1.0f;
-
-    return float4(color, alpha);
+float3 LinearToSRGB(float3 In)
+{
+    float3 sRGBLo = In * 12.92;
+    float3 sRGBHi = (pow(max(abs(In), 1.192092896e-07), float3(1.0 / 2.4, 1.0 / 2.4, 1.0 / 2.4)) * 1.055) - 0.055;
+    return float3(In <= 0.0031308) ? sRGBLo : sRGBHi;
 }
 
 float3 Unity_ColorspaceConversion_RGB_HSV_float(float3 In)
@@ -44,6 +52,36 @@ float3 Unity_ColorspaceConversion_RGB_HSV_float(float3 In)
     return float3(abs(Q.z + (Q.w - Q.y)/(6.0 * D + E)), D / (Q.x + E), Q.x);;
 }
 
+float4 Unity_SampleGradient_float(uint index, GradientParameterData Parameter, float Time)
+{
+    uint baseIndex = index * 8;
+
+    float3 color = _GradientKeyData[baseIndex].color.rgb;
+
+    [unroll]
+    for (int c = 1; c < 8; c++) {
+        float colorPos = saturate((Time - _GradientKeyData[baseIndex + c - 1].color.w) / (_GradientKeyData[baseIndex + c].color.w - _GradientKeyData[baseIndex + c - 1].color.w)) * step(c, Parameter.colorLength - 1);
+
+        float3 nextColor = _GradientKeyData[baseIndex + c].color.rgb;
+
+        color = lerp(color, nextColor, lerp(colorPos, step(0.01, colorPos), _GradientHardness));
+    }
+
+    // Convert back to sRGB space if necessary
+    #ifndef UNITY_COLORSPACE_GAMMA
+        //color = LinearToSRGB(color);
+    #endif
+
+    float alpha = _GradientKeyData[baseIndex].alpha.x;
+    [unroll]
+    for (int a = 1; a < 8; a++) {
+        float alphaPos = saturate((Time - _GradientKeyData[baseIndex + a - 1].alpha.y) / (_GradientKeyData[baseIndex + a].alpha.y - _GradientKeyData[baseIndex + a - 1].alpha.y)) * step(a, Parameter.alphaLength - 1);
+        alpha = lerp(alpha, _GradientKeyData[baseIndex + a].alpha.x, lerp(alphaPos, step(0.01, alphaPos), _GradientHardness));
+    }
+
+    return float4(color, alpha);
+}
+
 [numthreads(8,8,1)]
 void RampMapGenerator (uint3 id : SV_DispatchThreadID)
 {
@@ -52,7 +90,7 @@ void RampMapGenerator (uint3 id : SV_DispatchThreadID)
     float gradientSpreadness = 1.0f - (_RampMapResolution - (float)id.y) / (_RampMapResolution * 2.0f);
     float time = id.x / _RampMapResolution;
     float timeOfColor = smoothstep(1.0f - gradientSpreadness, gradientSpreadness, time);
-    _RampMap[id.xy] = Unity_SampleGradient_float(_GradientColorKeys, timeOfColor);
+    _RampMap[id.xy] = Unity_SampleGradient_float(0, _GradientParameterData[0], timeOfColor);
 }
 
 [numthreads(8,1,1)]
@@ -61,8 +99,9 @@ void GradientMapGenerator (uint3 id : SV_DispatchThreadID)
     _GradientMap.GetDimensions(_GradientMapResolution.x, _GradientMapResolution.y);
     
     float time = id.x / _GradientMapResolution;
-    int index = (_GradientMapResolution.y - 1) - _GradientIndex;
-    _GradientMap[float2(id.x, index)] = Unity_SampleGradient_float(_GradientColorKeys, time);
+    int index = id.y;
+    float2 resultPos = float2(id.x, (_GradientMapResolution.y - 1) - index);
+    _GradientMap[resultPos] = Unity_SampleGradient_float(index, _GradientParameterData[index], time);
 }
 
 [numthreads(8,8,1)]

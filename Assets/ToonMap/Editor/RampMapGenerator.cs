@@ -1,131 +1,25 @@
-﻿using System.IO;
-using UnityEditor;
-using UnityEditor.UIElements;
+﻿using System;
 using UnityEngine;
-using UnityEngine.UIElements;
+using static ToonMapCommon;
 
 /// <summary>
 /// Generate and save a RampMap using a ComputeShader based on the input Gradient.
 /// </summary>
-public class RampMapGenerator : EditorWindow
+public class RampMapGenerator : IDisposable
 {
-    public static int _rampMapResolution = 128;
-    private static float _gradientHardness = 0.0f;
-    private static Gradient _gradient = new Gradient();
-    private static ComputeShader _rampMapComputeShader = default;
-    private Vector4[] _gradientColorKeys;
-    private ComputeBuffer _gradientColorKeysBuffer;
+    public static ComputeShader ComputeShader { get => _computeShader; }
+    public RenderTexture RampMap { get => _rampMap; }
+
+    private static ComputeShader _computeShader = default;
+    private ToonMapGeneratorData _data;
+    private ComputeBuffer _keyBuffer;
+    private ComputeBuffer _paramBuffer;
     private RenderTexture _rampMap;
 
-    private bool _resolutionChanged = true;
-
-    [MenuItem("Tools/RampMap Generator")]
-    static void Init()
+    public RampMapGenerator(ToonMapGeneratorData data)
     {
-        RampMapGenerator window = (RampMapGenerator)EditorWindow.GetWindow(typeof(RampMapGenerator), false, "RampMap Generator");
-        window.Show();
-    }
-
-    //Load ComputeShader when Awake
-    void Awake()
-    {
-        if (!_rampMapComputeShader)
-        {
-            _rampMapComputeShader = ToonMapCommon.LoadComputeShader();
-        }
-
-        _resolutionChanged = true;
-    }
-
-    private void OnDestroy()
-    {
-        if (_gradientColorKeysBuffer != null)
-        {
-            _gradientColorKeysBuffer.Release();
-        }
-        if (_rampMap != null)
-        {
-            _rampMap.Release();
-        }
-    }
-
-    public void CreateGUI()
-    {
-        // Load and clone the UXML.
-        string[] guids = AssetDatabase.FindAssets($"RampMapGenerator t:{nameof(VisualTreeAsset)}");
-        if (guids.Length == 0)
-        {
-            return;
-        }
-
-        string path = AssetDatabase.GUIDToAssetPath(guids[0]);
-        VisualTreeAsset visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(path);
-        VisualElement root = visualTree.CloneTree();
-        rootVisualElement.Add(root);
-
-        // Bind UI elements
-        Button saveButton = root.Q<Button>("saveButton");
-        Button previewButton = root.Q<Button>("previewButton");
-        IntegerField resolutionField = root.Q<IntegerField>("resolutionField");
-        Slider hardnessSlider = root.Q<Slider>("hardnessSlider");
-        GradientField gradientField = root.Q<GradientField>("gradientField");
-        HelpBox errorBox = root.Q<HelpBox>("errorBox");
-        VisualElement previewContainer = root.Q<VisualElement>("previewContainer");
-
-        // Initialize fields
-        resolutionField.value = _rampMapResolution;
-        hardnessSlider.value = _gradientHardness;
-        gradientField.value = _gradient;
-        errorBox.style.display = DisplayStyle.None;
-
-        // Add event listeners
-        saveButton.clicked += () =>
-        {
-            string path = EditorUtility.SaveFilePanel("Choose Path To Save RampMap", Application.dataPath, "RampMap", "png");
-            if (!string.IsNullOrEmpty(path))
-            {
-                GenerateRampMapAndSave(path);
-            }
-        };
-
-        previewButton.clicked += () =>
-        {
-            GenerateRampMapByComputeShader();
-            DrawPreviewTexture(previewContainer);
-        };
-
-        resolutionField.RegisterValueChangedCallback(evt =>
-        {
-            _rampMapResolution = evt.newValue;
-            _resolutionChanged = true;
-            GenerateRampMapByComputeShader();
-            DrawPreviewTexture(previewContainer);
-        });
-
-        hardnessSlider.RegisterValueChangedCallback(evt =>
-        {
-            _gradientHardness = evt.newValue;
-            GenerateRampMapByComputeShader();
-            DrawPreviewTexture(previewContainer);
-        });
-
-        gradientField.RegisterValueChangedCallback(evt =>
-        {
-            _gradient = evt.newValue;
-            GenerateRampMapByComputeShader();
-            DrawPreviewTexture(previewContainer);
-        });
-
-        // Validate compute shader
-        if (!_rampMapComputeShader || !_rampMapComputeShader.HasKernel("RampMapGenerator"))
-        {
-            errorBox.style.display = DisplayStyle.Flex;
-        }
-        else
-        {
-            GenerateRampMapByComputeShader();
-            DrawPreviewTexture(previewContainer);
-        }
+        _computeShader = LoadComputeShader();
+        _data = data;
     }
 
     public void GenerateRampMapAndSave(string path)
@@ -133,58 +27,70 @@ public class RampMapGenerator : EditorWindow
         if (path.Length != 0)
         {
             GenerateRampMapByComputeShader();
-            ToonMapCommon.DumpRenderTextureToScreenThenSave(path, _rampMapResolution, _rampMapResolution, _rampMap);
+            DumpRenderTextureToScreenThenSave(path, _data.Resolution, _data.Resolution, false, _rampMap);
         }
     }
 
-    void GenerateRampMapByComputeShader()
+    public void GenerateRampMapByComputeShader()
     {
-        if (_rampMapComputeShader)
+        if (_computeShader)
         {
-            if (!_rampMapComputeShader.HasKernel("RampMapGenerator"))
+            if (!_computeShader.HasKernel("RampMapGenerator"))
             {
                 return;
             }
 
-            if (_resolutionChanged)
+            bool needsRealloc = _rampMap == null ||
+                                _rampMap.width != _rampMap.width ||
+                                _rampMap.height != _rampMap.height;
+
+            if (needsRealloc)
             {
                 if (_rampMap != null)
                     _rampMap.Release();
 
-                _rampMap = new RenderTexture(_rampMapResolution, _rampMapResolution, 0, RenderTextureFormat.ARGB32);
+                _rampMap = new RenderTexture(_data.Resolution, _data.Resolution, 0, RenderTextureFormat.ARGB32);
                 _rampMap.enableRandomWrite = true;
                 _rampMap.Create();
-                _resolutionChanged = false;
             }
 
-            GradientColorKey[] tempGradientColorKeys = _gradient.colorKeys;
-            _gradientColorKeys = new Vector4[tempGradientColorKeys.Length];
+            _keyBuffer = new ComputeBuffer(MaxKeys, System.Runtime.InteropServices.Marshal.SizeOf(typeof(GradientKeyData)));
+            _paramBuffer = new ComputeBuffer(1, System.Runtime.InteropServices.Marshal.SizeOf(typeof(GradientParameterData)));
 
-            for (int i = 0; i < tempGradientColorKeys.Length; i++)
-            {
-                _gradientColorKeys[i] = tempGradientColorKeys[i].color;
-                _gradientColorKeys[i].w = tempGradientColorKeys[i].time;
-            }
+            var data = GetGradientData(_data.RampGradient);
 
-            _gradientColorKeysBuffer = new ComputeBuffer(_gradientColorKeys.Length, 16);
-            _gradientColorKeysBuffer.SetData(_gradientColorKeys);
+            _keyBuffer.SetData(data.keys);
+            _paramBuffer.SetData(new GradientParameterData[] { data.parameter });
 
-            int kernal = _rampMapComputeShader.FindKernel("RampMapGenerator");
-            int threadGroupAmount = Mathf.CeilToInt(_rampMapResolution / 8.0f);
+            int kernel = _computeShader.FindKernel("RampMapGenerator");
 
-            _rampMapComputeShader.SetTexture(kernal, "_RampMap", _rampMap);
-            _rampMapComputeShader.SetBuffer(kernal, "_GradientColorKeys", _gradientColorKeysBuffer);
-            _rampMapComputeShader.SetFloat("_GradientColorKeysAmount", _gradientColorKeys.Length);
-            _rampMapComputeShader.SetFloat("_GradientHardness", _gradientHardness);
-            _rampMapComputeShader.Dispatch(kernal, threadGroupAmount, threadGroupAmount, 1);
-            _gradientColorKeysBuffer.Release();
+            _computeShader.SetTexture(kernel, "_RampMap", _rampMap);
+            _computeShader.SetBuffer(kernel, "_GradientKeyData", _keyBuffer);
+            _computeShader.SetBuffer(kernel, "_GradientParameterData", _paramBuffer);
+            _computeShader.SetFloat("_GradientHardness", _data.Hardness);
 
+            int threadGroupAmount = Mathf.CeilToInt(_data.Resolution / 8.0f);
+            _computeShader.Dispatch(kernel, threadGroupAmount, threadGroupAmount, 1);
             Debug.Log("Generate RampMap");
+
+            _keyBuffer.Release();
+            _paramBuffer.Release();
         }
     }
 
-    private void DrawPreviewTexture(VisualElement container)
+    public void Dispose()
     {
-        container.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(_rampMap));
+        if (_keyBuffer != null)
+        {
+            _keyBuffer.Release();
+        }
+        if (_paramBuffer != null)
+        {
+            _paramBuffer.Release();
+        }
+        if (_rampMap != null)
+        {
+            _rampMap.Release();
+        }
     }
 }
