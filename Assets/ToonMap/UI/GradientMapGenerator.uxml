@@ -1,5 +1,5 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
-    <Style src="project://database/Assets/GradientMap/UI/RampMapGenerator.uss?fileID=7433441132597879392&amp;guid=6aa40e1677b0c7542b74eede3788ea7e&amp;type=3#RampMapGenerator" />
+    <Style src="project://database/Assets/ToonMap/UI/RampMapGenerator.uss?fileID=7433441132597879392&amp;guid=6aa40e1677b0c7542b74eede3788ea7e&amp;type=3#RampMapGenerator" />
     <ui:VisualElement style="height: 100%;">
         <ui:Button name="saveButton" text="Save GradientMap" />
         <ui:Button name="previewButton" text="Preview GradientMap" />
@@ -8,6 +8,7 @@
         <ui:Label text="Gradients" />
         <ui:IMGUIContainer name="gradientListContainer" />
         <uie:ObjectField name="previewTextureField" label="Grayscale Texture For Preview" object-type="UnityEngine.Texture2D" allow-scene-objects="false" type="UnityEngine.Texture2D, UnityEngine.CoreModule" />
+        <ui:Toggle name="hdrToggle" label="Use HDR" />
         <ui:Toggle name="showAlphaToggle" label="Preview with Alpha" />
         <ui:EnumField name="sourceTypeField" label="Greyscale From Source Image&apos;s" />
         <ui:HelpBox name="errorBox" message-type="Error" text="GradientMap Generator ComputeShader Is Missing" />

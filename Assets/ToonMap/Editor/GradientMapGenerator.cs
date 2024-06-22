@@ -10,9 +10,12 @@ public class GradientMapGenerator : EditorWindow
     private int _gradientMapResolution = 128;
     private float _gradientHardness = 0.0f;
     private GradientMapGeneratorData _gradientMapGeneratorData;
+    private Gradient[] _currentGradientList;
     private Texture2D _previewTexture = default;
+    private bool _hdr = false;
     private bool _showAlpha = false;
     private GradientMapGeneratorData.GreyscaleSourceType _sourceType;
+
     private static ComputeShader _gradientMapComputeShader = default;
     private ComputeBuffer _gradientColorKeysBuffer;
     private RenderTexture _gradientMap;
@@ -21,8 +24,12 @@ public class GradientMapGenerator : EditorWindow
     private bool _resolutionChanged = true;
     private int _currentSelectedIndex = 0;
     private ReorderableList _gradientReorderableList = null;
+    private ReorderableList _hdrGradientReorderableList = null;
     private VisualElement _gradientPreview, _applyPreview;
+
     private SerializedObject _serializedObject;
+    private SerializedProperty _gradientListProperty;
+    private SerializedProperty _hdrGradientListProperty;
     const string _settingDataDefaultPath = "Assets/Settings/GradientListData.asset";
 
     [MenuItem("Tools/GradientMap Generator")]
@@ -53,8 +60,14 @@ public class GradientMapGenerator : EditorWindow
 
         _resolutionChanged = true;
         _serializedObject = new SerializedObject(_gradientMapGeneratorData);
-        _gradientReorderableList = new ReorderableList(_serializedObject, _serializedObject.FindProperty("GradientList"), true, false, true, true);
-        _gradientReorderableList.drawElementCallback = DrawListElement;
+        _gradientListProperty = _serializedObject.FindProperty("GradientList");
+        _hdrGradientListProperty = _serializedObject.FindProperty("HDRGradientList");
+
+        _gradientReorderableList = new ReorderableList(_serializedObject, _gradientListProperty, true, false, true, true);
+        _gradientReorderableList.drawElementCallback = (rect, index, isActive, isFocused) => DrawListElement(rect, index, isActive, isFocused, _gradientListProperty);
+
+        _hdrGradientReorderableList = new ReorderableList(_serializedObject, _hdrGradientListProperty, true, false, true, true);
+        _hdrGradientReorderableList.drawElementCallback = (rect, index, isActive, isFocused) => DrawListElement(rect, index, isActive, isFocused, _hdrGradientListProperty);
     }
 
     void OnDestroy()
@@ -94,6 +107,7 @@ public class GradientMapGenerator : EditorWindow
         Slider hardnessSlider = root.Q<Slider>("hardnessSlider");
         IMGUIContainer gradientListContainer = root.Q<IMGUIContainer>("gradientListContainer");
         ObjectField previewTextureField = root.Q<ObjectField>("previewTextureField");
+        Toggle hdrToggle = root.Q<Toggle>("hdrToggle");
         Toggle showAlphaToggle = root.Q<Toggle>("showAlphaToggle");
         EnumField sourceTypeField = root.Q<EnumField>("sourceTypeField");
         HelpBox errorBox = root.Q<HelpBox>("errorBox");
@@ -105,15 +119,23 @@ public class GradientMapGenerator : EditorWindow
         _applyPreview = applyGradientPreview;
 
         // Initialize fields
-        resolutionField.value = _gradientMapResolution;
-        hardnessSlider.value = _gradientHardness;
+        resolutionField.value = _gradientMapGeneratorData.GradientMapResolution;
+        hardnessSlider.value = _gradientMapGeneratorData.GradientHardness;
         previewTextureField.value = _previewTexture;
-        showAlphaToggle.value = _showAlpha;
+        //hdrToggle.value = _gradientMapGeneratorData.HDR;
+        showAlphaToggle.value = _gradientMapGeneratorData.ShowAlpha;
         errorBox.style.display = DisplayStyle.None;
         sourceTypeField.Init(_sourceType);
 
         // Add event listeners
         _gradientReorderableList.onSelectCallback = (ReorderableList list) =>
+        {
+            _currentSelectedIndex = list.index;
+            GenerateGradientMapByComputeShader();
+            DrawPreviewTexture();
+        };
+
+        _hdrGradientReorderableList.onSelectCallback = (ReorderableList list) =>
         {
             _currentSelectedIndex = list.index;
             GenerateGradientMapByComputeShader();
@@ -143,6 +165,7 @@ public class GradientMapGenerator : EditorWindow
             _gradientMapResolution = evt.newValue;
             GenerateGradientMapByComputeShader();
             DrawPreviewTexture();
+            SaveGradientMapGeneratorData();
         });
 
         hardnessSlider.RegisterValueChangedCallback(evt =>
@@ -150,9 +173,20 @@ public class GradientMapGenerator : EditorWindow
             _gradientHardness = evt.newValue;
             GenerateGradientMapByComputeShader();
             DrawPreviewTexture();
+            SaveGradientMapGeneratorData();
         });
 
-        gradientListContainer.onGUIHandler = DrawGradientList;
+        gradientListContainer.onGUIHandler = () =>
+        {
+            if (_hdr)
+            {
+                DrawGradientList(_gradientListProperty, _hdrGradientReorderableList);
+            }
+            else
+            {
+                DrawGradientList(_gradientListProperty, _gradientReorderableList);
+            }
+        };
 
         previewTextureField.RegisterValueChangedCallback(evt =>
         {
@@ -161,11 +195,24 @@ public class GradientMapGenerator : EditorWindow
             DrawPreviewTexture();
         });
 
+        hdrToggle.RegisterValueChangedCallback(evt =>
+        {
+            _hdr = evt.newValue;
+            _currentGradientList = _hdr ? _gradientMapGeneratorData.HDRGradientList : _gradientMapGeneratorData.GradientList;
+
+            GenerateGradientMapByComputeShader();
+            DrawPreviewTexture();
+            SaveGradientMapGeneratorData();
+        });
+        hdrToggle.value = _gradientMapGeneratorData.HDR;
+
+
         showAlphaToggle.RegisterValueChangedCallback(evt =>
         {
             _showAlpha = evt.newValue;
             GenerateGradientMapByComputeShader();
             DrawPreviewTexture();
+            SaveGradientMapGeneratorData();
         });
 
         sourceTypeField.RegisterValueChangedCallback(evt =>
@@ -173,6 +220,7 @@ public class GradientMapGenerator : EditorWindow
             _sourceType = (GradientMapGeneratorData.GreyscaleSourceType)evt.newValue;
             GenerateGradientMapByComputeShader();
             DrawPreviewTexture();
+            SaveGradientMapGeneratorData();
         });
 
         // Validate compute shader
@@ -184,10 +232,14 @@ public class GradientMapGenerator : EditorWindow
 
     void SaveGradientMapGeneratorData()
     {
+        _serializedObject.ApplyModifiedProperties();
+
         _gradientMapGeneratorData.GradientMapResolution = _gradientMapResolution;
         _gradientMapGeneratorData.GradientHardness = _gradientHardness;
+        _gradientMapGeneratorData.HDR = _hdr;
         _gradientMapGeneratorData.ShowAlpha = _showAlpha;
         _gradientMapGeneratorData.SourceRemapType = _sourceType;
+
         EditorUtility.SetDirty(_gradientMapGeneratorData);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -198,7 +250,7 @@ public class GradientMapGenerator : EditorWindow
         if (!string.IsNullOrEmpty(path))
         {
             GenerateGradientMapByComputeShader();
-            ToonMapCommon.DumpRenderTextureToScreenThenSave(path, _gradientMapResolution, _gradientMapGeneratorData.GradientList.Length, _gradientMap);
+            ToonMapCommon.DumpRenderTextureToScreenThenSave(path, _gradientMapResolution, _currentGradientList.Length, _gradientMap);
             _gradientColorKeysBuffer.Release();
         }
     }
@@ -212,12 +264,12 @@ public class GradientMapGenerator : EditorWindow
                 return;
             }
 
-            if(_resolutionChanged)
+            if (_resolutionChanged)
             {
-                if(_gradientMap != null)
+                if (_gradientMap != null)
                     _gradientMap.Release();
 
-                _gradientMap = new RenderTexture(_gradientMapResolution, _gradientMapGeneratorData.GradientList.Length, 0, RenderTextureFormat.ARGB32);
+                _gradientMap = new RenderTexture(_gradientMapResolution, _currentGradientList.Length, 0, RenderTextureFormat.ARGB32);
                 _gradientMap.filterMode = FilterMode.Point;
                 _gradientMap.wrapModeV = TextureWrapMode.Repeat;
                 _gradientMap.enableRandomWrite = true;
@@ -225,14 +277,14 @@ public class GradientMapGenerator : EditorWindow
             }
             _resolutionChanged = false;
 
-            for (int i = 0; i < _gradientMapGeneratorData.GradientList.Length; i++)
+            for (int i = 0; i < _currentGradientList.Length; i++)
             {
-                if (_gradientMapGeneratorData.GradientList[i] == null)
+                if (_currentGradientList[i] == null)
                 {
                     return;
                 }
 
-                GradientColorKey[] tempGradientColorKeys = _gradientMapGeneratorData.GradientList[i].colorKeys;
+                GradientColorKey[] tempGradientColorKeys = _currentGradientList[i].colorKeys;
                 Vector4[] gradientColorKeys = new Vector4[tempGradientColorKeys.Length];
                 for (int j = 0; j < tempGradientColorKeys.Length; j++)
                 {
@@ -285,7 +337,7 @@ public class GradientMapGenerator : EditorWindow
 
     private void DrawPreviewTexture()
     {
-        int height = _gradientMapGeneratorData.GradientList.Length * 8;
+        int height = _currentGradientList.Length * 8;
         _gradientPreview.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(_gradientMap));
         _gradientPreview.style.height = height;
 
@@ -295,14 +347,14 @@ public class GradientMapGenerator : EditorWindow
     /// <summary>
     /// To update the preview in real-time when selecting a gradient, we can only use the ReorderableList to listen for the currently selected gradient index.
     /// </summary>
-    void DrawGradientList()
+    void DrawGradientList(SerializedProperty property, ReorderableList list)
     {
         EditorGUI.BeginChangeCheck();
-        SerializedProperty property = _gradientReorderableList.serializedProperty;
+
         property.isExpanded = EditorGUILayout.Foldout(property.isExpanded, property.displayName);
         if (property.isExpanded)
         {
-            _gradientReorderableList.DoLayoutList();
+            list.DoLayoutList();
         }
         if (EditorGUI.EndChangeCheck())
         {
@@ -312,15 +364,14 @@ public class GradientMapGenerator : EditorWindow
                 DrawPreviewTexture();
             }
 
-            _serializedObject.ApplyModifiedProperties();
             SaveGradientMapGeneratorData();
         }
     }
 
-    void DrawListElement(Rect rect, int index, bool isActive, bool isFocused)
+    void DrawListElement(Rect rect, int index, bool isActive, bool isFocused, SerializedProperty property)
     {
         var arect = rect;
-        var serElem = _gradientReorderableList.serializedProperty.GetArrayElementAtIndex(index);
+        var serElem = property.GetArrayElementAtIndex(index);
         arect.height = EditorGUIUtility.singleLineHeight;
         EditorGUI.PropertyField(arect, serElem, GUIContent.none);
     }
