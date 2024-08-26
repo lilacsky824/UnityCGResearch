@@ -1,0 +1,102 @@
+.Root {
+    flex-grow: 1;
+    background-color: rgb(0, 0, 0);
+    padding-top: 30px;
+    padding-right: 30px;
+    padding-bottom: 30px;
+    padding-left: 30px;
+}
+
+.Title {
+    color: rgb(255, 255, 255);
+    -unity-font-definition: url("project://database/Assets/Jump%20Flood%20Algorithm/UI/NotoSansCJKtc-Bold.ttf?fileID=12800000&guid=afca2db94809170438e2e4cffcc4516b&type=3#NotoSansCJKtc-Bold");
+    -unity-font-style: bold;
+    border-left-color: rgb(255, 255, 255);
+    border-right-color: rgb(255, 255, 255);
+    border-top-color: rgb(255, 255, 255);
+    border-bottom-color: rgb(255, 255, 255);
+    border-bottom-width: 1px;
+    font-size: 28px;
+}
+
+.Container {
+    flex-grow: 1;
+    flex-direction: row;
+    justify-content: space-around;
+}
+
+.ContainerView {
+    background-image: url("project://database/Assets/Jump%20Flood%20Algorithm/Source.png?fileID=2800000&guid=4801c618df9055f41bd48fe42801012f&type=3#Source");
+    -unity-background-scale-mode: scale-to-fit;
+    width: 40%;
+}
+
+.Result {
+    justify-content: flex-end;
+    align-content: flex-end;
+    margin-top: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+    margin-left: 0;
+}
+
+#ResultMenu {
+    height: 5%;
+    flex-shrink: 0;
+    flex-direction: row;
+    margin-top: 10px;
+    margin-right: 10px;
+    margin-bottom: 20px;
+    margin-left: 10px;
+    background-color: rgb(0, 0, 0);
+}
+
+.ResultMenuTab {
+    flex-direction: column;
+    flex-shrink: 0;
+    flex-grow: 1;
+    background-color: rgb(255, 255, 255);
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    align-content: center;
+    font-size: 24px;
+    -unity-font-style: bold;
+    transition-duration: 0.3s;
+    transition-timing-function: ease-in-out;
+    margin-right: 10px;
+    margin-left: 10px;
+}
+
+.ResultMenuTab:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+.ResultMenuTab:checked {
+    background-color: rgb(0, 0, 0);
+    color: rgb(255, 255, 255);
+    border-left-color: rgb(255, 255, 255);
+    border-right-color: rgb(255, 255, 255);
+    border-top-color: rgb(255, 255, 255);
+    border-bottom-color: rgb(255, 255, 255);
+    border-top-width: 2px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+    border-left-width: 2px;
+}
+
+#Root > #Container > #Result > #ResultMenu > #unity-toggle-button-group__container {
+    flex-grow: 1;
+    flex-shrink: 0;
+    height: 100%;
+}
+
+.TweakLabel {
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+}
+
+.TweakLabel :enabled {
+    color: rgb(255, 255, 255);
+}
