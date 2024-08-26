@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="True">
+    <Style src="project://database/Assets/GradientMap/UI/RampMapGenerator.uss?fileID=7433441132597879392&amp;guid=6aa40e1677b0c7542b74eede3788ea7e&amp;type=3#RampMapGenerator" />
+    <ui:VisualElement style="flex-grow: 1; height: 100%; width: 100%; flex-shrink: 0;">
+        <ui:Button name="saveButton" text="Save RampMap" />
+        <ui:Button name="previewButton" text="Preview RampMap" />
+        <ui:IntegerField name="resolutionField" label="RampMap Resolution:" value="128" />
+        <ui:Slider name="hardnessSlider" label="Gradient Hardness" lowValue="0" highValue="1" value="0.0" high-value="1" tooltip="Gradient Hardness between Keys" />
+        <uie:GradientField name="gradientField" label="Gradient" value="Blend:{0,#FFFFFFFF};{1,#808080FF}+{0,1};{1,1}" />
+        <ui:HelpBox name="errorBox" messageType="Error" text="RampMap Generator ComputeShader Is Missing" message-type="Error" style="flex-shrink: 0;" />
+        <ui:VisualElement name="previewContainer" class="previewContainer" />
+    </ui:VisualElement>
+</ui:UXML>
