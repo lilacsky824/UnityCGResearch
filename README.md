@@ -10,6 +10,12 @@ Generating Voronoi diagrams and distance fields using Compute Shaders.
 Ramp Map and Gradient Map generators, using Compute Shader.
 ![Toon Map](https://github.com/lilacsky824/UnityCGResearch/assets/75205949/20ea9302-5733-4c5d-8ef5-0ea007fb5830)
 
-# Spine Vertex Animation Texture
+# Vertex Animation Texture(VAT)
+## Spine
 Bake Spine skeleton animation into VAT and use the Particle System for random playback, creating the effect of a crowd running.
 <video src="https://github.com/user-attachments/assets/0b5d9a97-88d3-41db-9619-a9d9a58dd20e"></video>
+
+## Blender(draft)
+Bake vertex animation in Blender into VAT and bake object space normals. Currently, Split Per-Vertex Normals is not supported.
+RGB channels store the vertex positions, while the alpha channel stores the normals using quantization.
+<video src="https://github.com/user-attachments/assets/f3ca7938-26ab-47f5-a93f-7fca45182618"></video>
