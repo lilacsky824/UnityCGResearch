@@ -4,6 +4,7 @@ Using Unity version 6000.0.32f1 with Universal Render Pipeline.
 # Parallax Occlusion Mapping with Depth Offset
 A Lit shader that is support parallax ccclusion mapping with per pixel depth offset. Including support shadow caster or use self shadowing.
 Some derivation processes can be found in the [blog post (in Traditional Chinese only)](https://lilacsky824.blogspot.com/2025/01/unity-shader-parallax-occlusion-mapping.html).
+<video src="https://github.com/user-attachments/assets/5568383d-3ebd-4797-89f0-ba9e761c911d"></video>
 ![ParallaxOcclusionMapping](https://github.com/user-attachments/assets/3c3d0200-5cd8-4690-8bc6-f423eee922d6)
 
 # Jump Flooding Algorithm
